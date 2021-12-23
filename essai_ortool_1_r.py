@@ -26,10 +26,12 @@ def main():
     n_anesthesistes = 15
     n_choix = 10
     n_jours = 21
+    n_choix_weekend = 2
 
     tousAnesthesistes = range(n_anesthesistes)
     tousChoix = range(n_choix)
     tousJours = range(n_jours)
+    tousChoixWeekend = range(n_choix_weekend)
 
     model = cp_model.CpModel()
 
@@ -50,10 +52,20 @@ def main():
 
     # Contraintes fondamentales:
     # Pour chaque journée, chaque salle disponible doit être occupée par un, et un seul anesthésiste
+    # Du lundi au vendredi toutes les salles doivent être affectées
+    # Le weekend, seulement 2 affectations: garde, choix 0 et deuxième de garde, choix 1
+    # Cette condition ne peut donc être respectée que s'il y a plus de 2 choix au total...
 
     for jour in tousJours:
-        for choix in tousChoix:
-            model.Add((sum(ordre[(anesthesiste, jour, choix)] for anesthesiste in tousAnesthesistes) == 1))
+        if (jour % 7 == 5 or jour % 7 == 6) and (n_choix > 2):
+            model.Add((sum(ordre[(anesthesiste, jour, 0)] for anesthesiste in tousAnesthesistes) == 1))
+            model.Add((sum(ordre[(anesthesiste, jour, 1)] for anesthesiste in tousAnesthesistes) == 1))
+            for choix in range(2, n_choix):
+                model.Add((sum(ordre[(anesthesiste, jour, choix)] for anesthesiste in tousAnesthesistes) == 0))
+        else:
+
+            for choix in tousChoix:
+                model.Add((sum(ordre[(anesthesiste, jour, choix)] for anesthesiste in tousAnesthesistes) == 1))
 
     # Contraintes fondamentales:
     # Les choix,  doivent être répartis également sur tous les anesthésistes
@@ -72,6 +84,17 @@ def main():
     for anesthesiste in tousAnesthesistes:
         for choix in premiersChoix:
             model.Add((sum(ordre[(anesthesiste, jour, choix)] for jour in tousJours) <= nombre_maximal_garde))
+
+    # Contraintes fondamentales:
+    # Le lendemain de la garde, correspondant au choix 0, il ne peut y avoir d'assignation
+
+    if n_jours > 1:
+        for anesthesiste in tousAnesthesistes:
+            for jour in range(1, n_jours):
+                model.Add((sum(ordre[(anesthesiste, jour, choix)] for choix in tousChoix) == 0)).OnlyEnforceIf(ordre[(anesthesiste, jour-1, 0)])
+
+
+
 
     # Configuration du résolveur de modèle
     # Aucune optimisation n'est demandée ici, on cherche seulement des solutions faisables
